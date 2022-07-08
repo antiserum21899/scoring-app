@@ -2,9 +2,84 @@ from asyncio import events
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 from UI_Main import Ui_MainWindow
+import sqlite3
+
 import sys
 
+connection = sqlite3.connect("participants.db")
+c = connection.cursor()
+
+c.execute("""CREATE TABLE if not exists type_table(
+    type_name TEXT
+)""")
+
+c.execute("""CREATE TABLE if not exists events_table(
+    event_name TEXT,
+    event_type TEXT,
+    FOREIGN KEY(event_type) REFERENCES type_table(type_name)
+)""")
+
+c.execute("""CREATE TABLE if not exists singles_table(
+    individual_name TEXT,
+    event_1 TEXT,
+    event_2 TEXT,
+    event_3 TEXT,
+    event_4 TEXT,
+    event_5 TEXT,
+    FOREIGN KEY(event_1) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_2) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_3) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_4) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_5) REFERENCES events_table(event_name)
+)""")
+
+c.execute("""CREATE TABLE if not exists teams_table(
+    team_name TEXT,
+    event_1 TEXT,
+    event_2 TEXT,
+    event_3 TEXT,
+    event_4 TEXT,
+    event_5 TEXT,
+    FOREIGN KEY(event_1) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_2) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_3) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_4) REFERENCES events_table(event_name),
+    FOREIGN KEY(event_5) REFERENCES events_table(event_name)
+)""")
+
+c.execute("""CREATE TABLE if not exists team_members_table(
+    member_1 TEXT,
+    member_2 TEXT,
+    member_3 TEXT,
+    member_4 TEXT,
+    member_5 TEXT,
+    team_name TEXT,
+    FOREIGN KEY(team_name) REFERENCES teams_table(team_name)
+)""")
+
+c.execute("""CREATE TABLE if not exists singles_scores_table(
+    individual TEXT,
+    event_name TEXT,
+    position INTEGER,
+    score INTEGER,
+    FOREIGN KEY(individual) REFERENCES singles_table(individual_name),
+    FOREIGN KEY(event_name) REFERENCES events_table(event_name)
+)""")
+
+c.execute("""CREATE TABLE if not exists team_scores_table(
+    team TEXT,
+    event_name TEXT,
+    position INTEGER,
+    score INTEGER,
+    FOREIGN KEY(team) REFERENCES teams_table(team_name),
+    FOREIGN KEY(event_name) REFERENCES events_table(event_name)
+)""")
+
+connection.commit()
+connection.close()
+
 class MainWindow():
+    # Creates dictionary to hold data
     database = {
         'participants': {}
     }
