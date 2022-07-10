@@ -1,4 +1,4 @@
-from asyncio import events
+from select import select
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QTableWidgetItem
 from MainUI import Ui_MainWindow
@@ -9,14 +9,9 @@ import sys
 connection = sqlite3.connect("participants.db")
 c = connection.cursor()
 
-c.execute("""CREATE TABLE if not exists type_table(
-    type_name TEXT
-)""")
-
 c.execute("""CREATE TABLE if not exists events_table(
     event_name TEXT,
-    event_type TEXT,
-    FOREIGN KEY(event_type) REFERENCES type_table(type_name)
+    event_type TEXT
 )""")
 
 c.execute("""CREATE TABLE if not exists singles_table(
@@ -25,12 +20,7 @@ c.execute("""CREATE TABLE if not exists singles_table(
     event_2 TEXT,
     event_3 TEXT,
     event_4 TEXT,
-    event_5 TEXT,
-    FOREIGN KEY(event_1) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_2) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_3) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_4) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_5) REFERENCES events_table(event_name)
+    event_5 TEXT
 )""")
 
 c.execute("""CREATE TABLE if not exists teams_table(
@@ -39,12 +29,7 @@ c.execute("""CREATE TABLE if not exists teams_table(
     event_2 TEXT,
     event_3 TEXT,
     event_4 TEXT,
-    event_5 TEXT,
-    FOREIGN KEY(event_1) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_2) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_3) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_4) REFERENCES events_table(event_name),
-    FOREIGN KEY(event_5) REFERENCES events_table(event_name)
+    event_5 TEXT
 )""")
 
 c.execute("""CREATE TABLE if not exists team_members_table(
@@ -53,26 +38,21 @@ c.execute("""CREATE TABLE if not exists team_members_table(
     member_3 TEXT,
     member_4 TEXT,
     member_5 TEXT,
-    team_name TEXT,
-    FOREIGN KEY(team_name) REFERENCES teams_table(team_name)
+    team_name TEXT
 )""")
 
 c.execute("""CREATE TABLE if not exists singles_scores_table(
     individual TEXT,
     event_name TEXT,
     position INTEGER,
-    score INTEGER,
-    FOREIGN KEY(individual) REFERENCES singles_table(individual_name),
-    FOREIGN KEY(event_name) REFERENCES events_table(event_name)
+    score INTEGER
 )""")
 
 c.execute("""CREATE TABLE if not exists team_scores_table(
     team TEXT,
     event_name TEXT,
     position INTEGER,
-    score INTEGER,
-    FOREIGN KEY(team) REFERENCES teams_table(team_name),
-    FOREIGN KEY(event_name) REFERENCES events_table(event_name)
+    score INTEGER
 )""")
 
 connection.commit()
@@ -101,12 +81,26 @@ class MainWindow():
         self.ui.add_events_btn.clicked.connect(self.add_events)
         self.ui.save_events_btn.clicked.connect(self.save_events)
 
+        # connects save button to function to save participant data to db
+        self.ui.participant_entry_form_save_btn.clicked.connect(self.save_participant)
+
+        # connects function to combobox to change event types
+        self.ui.team_or_individual.currentIndexChanged.connect(self.swap_events)
+
         self.team_members = [
             self.ui.member_1,
             self.ui.member_2,
             self.ui.member_3,
             self.ui.member_4,
-            self.ui.member_5
+            self.ui.member_5,
+        ]
+
+        self.event_cbs = [
+            self.ui.event_1_cb,
+            self.ui.event_2_cb,
+            self.ui.event_3_cb,
+            self.ui.event_4_cb,
+            self.ui.event_5_cb,
         ]
 
     def show(self):
@@ -139,24 +133,24 @@ class MainWindow():
 
         self.ui.events_tableWidget.setItem(row, 0, QTableWidgetItem(event_name))
         self.ui.events_tableWidget.setItem(row, 1, QTableWidgetItem(event_type))
-
         self.ui.add_events_lineEdit.setText("")
 
-    # function to save data to database
+    # function to save event data to database
     def save_events(self):
-        rowCount = self.ui.events_tableWidget.rowCount()
-        columnCount = self.ui.events_tableWidget.columnCount()
+        row_count = self.ui.events_tableWidget.rowCount()
+        column_count = self.ui.events_tableWidget.columnCount()
+        # holds data from table
         event_data = []
         events = []
-
-        for row in range(rowCount):
-            for column in range(columnCount):
+        # iterates over the rows and columns and appends each item from each cell into array
+        for row in range(row_count): 
+            for column in range(column_count):
                 table_item = self.ui.events_tableWidget.item(row, column)
                 event_data.append(table_item.text())
-
+        # iterates over events_data array and appends every event name and event type pair as a tuple in events array
         for i in range(0, len(event_data), 2):
             events.append(tuple(event_data[i:i + 2]))
-
+        print(events)
         connection = sqlite3.connect("participants.db")
         c = connection.cursor()
         c.executemany("INSERT INTO events_table VALUES (?, ?)", events)  
@@ -165,15 +159,106 @@ class MainWindow():
 
         self.show_saved_message("events")
 
+    # function to save participant data to database
+    def save_participant(self):
+        connection = sqlite3.connect("participants.db")
+        c = connection.cursor()
+        selected_events = []
+        if self.ui.team_or_individual.currentText() == "Team":
+            team_name = self.ui.name.text()
+            team_members = []
+            #converted_members = []
+            selected_events.append(team_name)
+            # loops over array of event comboboxs and appends text of each to events array
+            for cbs in self.event_cbs:
+                selected_events.append(cbs.currentText())
+
+            converted_events = [self.convert_array_to_tuple(selected_events)]
+            # loops over array of member line edits and appends text of each to team_members array
+            for member in self.team_members:
+                team_members.append(member.text())
+
+            team_members.append(team_name)
+            print(team_members)
+            converted_members = [self.convert_array_to_tuple(team_members)]
+            print(converted_members)
+
+            c.executemany("INSERT INTO teams_table VALUES (?, ?, ?, ?, ?, ?)", converted_events)
+            c.executemany("INSERT INTO team_members_table VALUES (?, ?, ?, ?, ?, ?)", converted_members)
+            connection.commit()
+            connection.close()
+            self.show_saved_message("team")
+        
+        elif self.ui.team_or_individual.currentText() == "Individual":
+            individual_name = self.ui.name.text()
+            selected_events.append(individual_name)
+            # loops over array of event comboboxs and appends text of each to events array
+            for cbs in self.event_cbs:
+                selected_events.append(cbs.currentText())
+
+            print(selected_events)
+            converted_events = [self.convert_array_to_tuple(selected_events)]
+            print(converted_events)
+
+            c.executemany("INSERT INTO singles_table VALUES (?, ?, ?, ?, ?, ?)", converted_events)
+            connection.commit()
+            connection.close()
+            self.show_saved_message("participant")
+
+    # function to swap between team or individual events
+    def swap_events(self):
+        events = []
+        connection = sqlite3.connect("participants.db")
+        c = connection.cursor()
+        # loops over event comboboxes and clears all data
+        for cb in self.event_cbs:
+            cb.clear()
+
+        if self.ui.team_or_individual.currentText() == "Team":
+            c.execute("SELECT event_name FROM events_table WHERE event_type='Team'")
+            event_names = c.fetchall() 
+            # loops over event_names and appends the event to events array
+            for event in event_names:
+                events.append(event[0])
+            # loops over comboboxes and adds the events to all comboboxes
+            for cbs in self.event_cbs:
+                cbs.addItems(events)
+
+            connection.commit()
+            connection.close()
+
+        elif self.ui.team_or_individual.currentText() == "Individual":
+            c.execute("SELECT event_name FROM events_table WHERE event_type='Individual'")
+            event_names = c.fetchall()
+            # loops over event_names and appends the event to events array
+            for event in event_names:
+                events.append(event[0])
+            # loops over comboboxes and adds the events to all comboboxes  
+            for cbs in self.event_cbs:
+                cbs.addItems(events)
+
+            connection.commit()
+            connection.close()
+
     def clear_data(self):
         pass
+
+    def convert_array_to_tuple(self, array):
+        return tuple(i for i in array)
 
     # creates popup message when save button is clicked
     def show_saved_message(self, text):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle("Information Box")
-        msg.setText("Your " + text + " have been saved.")
+        msg.setText("Your " + text + " have been sucessfully saved to the database.")
+        init_msg = msg.exec_()
+
+    def show_error_message(self, text):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Warning!")
+        msg.setText(text)
         init_msg = msg.exec_()
 
 # runs the main application            
